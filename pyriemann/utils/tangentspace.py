@@ -396,6 +396,7 @@ log_map_functions = {
     "logchol": log_map_logchol,
     "logeuclid": log_map_logeuclid,
     "riemann": log_map_riemann,
+    "riemann_or": log_map_riemann
 }
 
 

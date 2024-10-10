@@ -706,7 +706,16 @@ def mean_wasserstein(X, tol=10e-4, maxiter=50, init=None, sample_weight=None):
     M = K @ K
     return M
 
-
+def mean_riemann_remove_outliers(X=None,**kwargs):
+    return mean_remove_outliers(X,
+                                mean_func = mean_riemann, 
+                                dist_func = distance_riemann, 
+                                method="zscore",
+                                outliers_th = 2.5,
+                                outliers_depth = 4,
+                                outliers_max_remove_th = 30,
+                                **kwargs
+                                )
 ###############################################################################
 
 
@@ -722,6 +731,7 @@ mean_functions = {
     "logeuclid": mean_logeuclid,
     "riemann": mean_riemann,
     "wasserstein": mean_wasserstein,
+    "riemann_or": mean_riemann_remove_outliers,
 }
 
 
@@ -938,3 +948,121 @@ def nanmean_riemann(X, tol=10e-9, maxiter=100, init=None, sample_weight=None):
         sample_weight=sample_weight
     )
     return M
+
+from scipy.stats import zscore
+def mean_remove_outliers( X,
+                          mean_func, 
+                          dist_func, 
+                          method="zscore",
+                          outliers_th = 2.5,
+                          outliers_depth = 4,
+                          outliers_max_remove_th = 30,
+                          **kwargs
+                          ):
+    
+    classes = [0]
+
+    # if  list(kwargs)[3] is None:
+    #     sample_weight = list(kwargs)[3] # make sure it is 3
+        
+    X_no_outliers = X.copy() #so that every power mean p start from the same data
+    
+    total_outliers_removed_per_class = np.zeros(len(classes))
+    total_samples_per_class          = np.zeros(len(classes))
+    
+    for ll in classes:
+        total_samples_per_class[ll] = X.shape[0]
+    
+    for i in range(outliers_depth):
+        
+        #print("\nremove outliers iteration: ",i)
+        
+        #calculate/update the n means (one for each class)
+        current_mean = mean_func(X = X_no_outliers, **kwargs) #p, sample_weight
+        
+        ouliers_per_iteration_count = {}
+        
+        #outlier removal is per class
+        for ll in classes:
+            
+            samples_before = X_no_outliers.shape[0]
+            
+            m = [] #each entry contains a distance to the power mean p for class ll
+            
+            #length includes all classes, not only the ll
+            z_scores = np.zeros(X_no_outliers.shape[0],dtype=float)
+        
+            # Calculate all the distances only for class ll and power mean p
+            data = X_no_outliers
+            for idx, x in enumerate (data):
+                
+                dist_p = dist_func(x, current_mean)
+                
+                # if self.distance_strategy == "power_distance":
+                #     dist_p = self._calculate_distance(x, self.covmeans_inv_[p][ll], p)
+                # else:
+                #     dist_p = self._calculate_distance(x, self.covmeans_[p][ll], p)
+                m.append(dist_p)
+            
+            m = np.array(m, dtype=float)
+            
+            if method == "zscore":
+                
+                m = np.log(m)
+                # Calculate Z-scores for each data point for the current ll class
+                # For the non ll the zscore stays 0, so they won't be removed
+                z_scores[ll==classes[0]] = zscore(m)
+            
+                outliers = (z_scores > outliers_th) | (z_scores < -outliers_th)
+                
+            else:   
+                raise Exception("Invalid Outlier Removal Method")
+
+            outliers_count = len(outliers[outliers==True])
+            
+            #check if too many samples are about to be removed
+            #case 1 less than self.max_outliers_remove_th are to be removed
+            if ((total_outliers_removed_per_class[ll] + outliers_count) / total_samples_per_class[ll]) * 100 < outliers_max_remove_th:
+                #print ("Removed for class ", ll ," ",  len(outliers[outliers==True]), " samples out of ", X_no_outliers.shape[0])
+        
+                X_no_outliers = X_no_outliers[~outliers]
+                #sample_weight = sample_weight[~outliers]
+            
+                if X_no_outliers.shape[0] != (samples_before - outliers_count):
+                    raise Exception("Error while removing outliers!")
+                
+                total_outliers_removed_per_class[ll] = total_outliers_removed_per_class[ll] + outliers_count
+            
+            else: #case 2 more than self.max_outliers_remove_th are to be removed
+                # if self.outliers_disable_mean:
+                #     is_disabled = True
+                #     print("WARNING: Power Mean disabled because too many samples were about to be removed for its calculation.")
+                #     break
+                # else:
+                print("WARNING: Skipped full outliers removal because too many samples were about to be removed.")
+            
+            ouliers_per_iteration_count[ll] = outliers_count
+        
+        #early stop: if no outliers were removed for both classes then we stop early
+        if sum(ouliers_per_iteration_count.values()) == 0:
+            break
+    
+    total_outliers_removed = int(total_outliers_removed_per_class.sum())
+        
+    if total_outliers_removed > 0:
+       
+        current_mean = mean_func(X = X_no_outliers, **kwargs)
+    
+        outliers_removed_for_single_mean_gt = X.shape[0] - X_no_outliers.shape[0]
+        
+        if (total_outliers_removed != outliers_removed_for_single_mean_gt):
+            raise Exception("Error outliers removal count!")
+            
+        #print("Outliers removed",total_outliers_removed, " out of ", X.shape[0])
+        
+        if (outliers_removed_for_single_mean_gt / X.shape[0]) * 100 > outliers_max_remove_th:
+            raise Exception("Outliers removal algorithm has removed too many samples: ", outliers_removed_for_single_mean_gt, " out of ",X.shape[0])
+    # else: 
+    #     print("No outliers removed")
+        
+    return current_mean

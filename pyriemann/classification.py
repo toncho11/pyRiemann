@@ -111,15 +111,15 @@ class MDM(BaseEstimator, ClassifierMixin, TransformerMixin):
         self.metric_mean, self.metric_dist = check_metric(self.metric)
         self.classes_ = np.unique(y)
 
-        if sample_weight is None:
-            sample_weight = np.ones(X.shape[0])
+        # if sample_weight is None:
+        #     sample_weight = np.ones(X.shape[0])
 
         if self.n_jobs == 1:
             self.covmeans_ = [
                 mean_covariance(
                     X[y == c],
                     metric=self.metric_mean,
-                    sample_weight=sample_weight[y == c]
+                    sample_weight=None#sample_weight[y == c] #modified for outlier removal
                 ) for c in self.classes_
             ]
         else:
@@ -127,7 +127,7 @@ class MDM(BaseEstimator, ClassifierMixin, TransformerMixin):
                 delayed(mean_covariance)(
                     X[y == c],
                     metric=self.metric_mean,
-                    sample_weight=sample_weight[y == c]
+                    sample_weight=None#sample_weight[y == c] #modified for outlier removal
                 ) for c in self.classes_
             )
 

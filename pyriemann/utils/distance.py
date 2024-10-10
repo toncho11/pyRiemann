@@ -550,6 +550,7 @@ distance_functions = {
     "logeuclid": distance_logeuclid,
     "riemann": distance_riemann,
     "wasserstein": distance_wasserstein,
+    "riemann_or": distance_riemann,
 }
 
 

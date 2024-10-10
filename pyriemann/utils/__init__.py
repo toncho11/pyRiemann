@@ -14,6 +14,7 @@ from .mean import (
     mean_wasserstein,
     maskedmean_riemann,
     nanmean_riemann,
+    mean_riemann_remove_outliers
 )
 from .median import (
     median_euclid,
@@ -38,4 +39,5 @@ __all__ = [
     "nanmean_riemann",
     "median_euclid",
     "median_riemann",
+    "mean_riemann_remove_outliers",
 ]
